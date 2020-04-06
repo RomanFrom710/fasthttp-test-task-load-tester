@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"strconv"
+	"runtime"
 	"time"
+
+	"github.com/paulbellamy/ratecounter"
 )
 
 type request struct {
@@ -18,14 +20,14 @@ type request struct {
 	Timestamp int64  `json:"timestamp"`
 }
 
-const requestAmount = 100000
-const timeStep = 10000 // In ms
-const routinesAmount = 10
+const requestAmount = 1000000
+const timeStep = 1 // In ms
 const url = "http://localhost:8080"
 
 func main() {
 	tm := int64(time.Now().Unix()) * 1000
-
+	routinesAmount := runtime.NumCPU()
+	counter := ratecounter.NewRateCounter(1 * time.Second)
 	ch := make(chan *request, routinesAmount*2)
 
 	randArray := make([]byte, 64)
@@ -35,8 +37,8 @@ func main() {
 			for {
 				req := <-ch
 				reqBody, _ := json.Marshal(req)
-				fmt.Println("Sending " + strconv.Itoa(req.ContentId))
 				http.Post(url, "application/json", bytes.NewReader(reqBody))
+				counter.Incr(1)
 			}
 		}()
 	}
@@ -54,4 +56,6 @@ func main() {
 		ch <- &req
 		tm += timeStep
 	}
+
+	fmt.Println(counter.Rate())
 }
